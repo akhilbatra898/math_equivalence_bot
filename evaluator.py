@@ -17,7 +17,7 @@ class Evaluator(ABC):
         pass
 
     @abstractmethod
-    def evaluate_batch(self, batch: List[Dict]) -> List[bool]:
+    def evaluate_batch(self, batch: List[Dict]) -> List[Dict]:
         pass
 
 

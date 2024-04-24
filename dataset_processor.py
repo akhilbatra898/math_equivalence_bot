@@ -18,5 +18,10 @@ class DatasetProcessor:
         evaluator = evaluator_cls()
         dataset: pd.DataFrame = pd.read_csv(file_name)
         dataset['Conversation History'] = dataset['Conversation History'].apply(cls.json_parse_conversation_column)
-        return evaluator.process(
-            dataset[['Conversation History', 'User Response', 'DialogID Hash']].to_dict(orient='records')[:5])
+        dataset = dataset.iloc[:10]
+        responses = evaluator.process(
+            dataset[['Conversation History', 'User Response', 'DialogID Hash']].to_dict(orient='records'))
+        print(responses)
+        final_data = dataset.merge(pd.DataFrame(responses)[['DialogID Hash', 'equivalence_prediction']],
+                                   on='DialogID Hash', how='left')
+        final_data.to_csv('final_data.csv')
