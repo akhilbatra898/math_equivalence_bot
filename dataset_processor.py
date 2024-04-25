@@ -18,10 +18,9 @@ class DatasetProcessor:
         evaluator = evaluator_cls()
         dataset: pd.DataFrame = pd.read_csv(file_name)
         dataset['Conversation History'] = dataset['Conversation History'].apply(cls.json_parse_conversation_column)
-        dataset = dataset.iloc[:10]
+        dataset = dataset.drop(columns=['LLM Equivalence Evaluation (Response)', 'Time taken to complete the request'])
         responses = evaluator.process(
-            dataset[['Conversation History', 'User Response', 'DialogID Hash']].to_dict(orient='records'))
-        print(responses)
-        final_data = dataset.merge(pd.DataFrame(responses)[['DialogID Hash', 'equivalence_prediction']],
-                                   on='DialogID Hash', how='left')
+            dataset[['Conversation History', 'User Response', 'DialogID Hash', 'Index']].to_dict(orient='records'))
+        final_data = dataset.merge(pd.DataFrame(responses)[['Index', 'LLM Equivalence Evaluation (Response)', 'Time taken to complete the request']],
+                                   on='Index', how='left')
         final_data.to_csv('final_data.csv')
