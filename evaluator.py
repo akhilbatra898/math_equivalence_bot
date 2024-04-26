@@ -7,10 +7,7 @@ class Evaluator(ABC):
 
     @abstractmethod
     def process(self, conversations: List[Dict]):
-        if len(conversations) > 0:
-            return self.evaluate_batch(conversations)
-        else:
-            return self.evaluate(conversations[0])
+        pass
 
     @abstractmethod
     def evaluate(self, conversation: Dict) -> bool:

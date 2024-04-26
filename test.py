@@ -1,9 +1,12 @@
 import os
 from dataset_processor import DatasetProcessor
-from gemini import GeminiEvaluator
+from gemini import GeminiModel
+import sys
 
 import os
 
 
-print(DatasetProcessor.process_file(file_name=os.path.abspath('./Accuracy Calculation Dataset.csv'),
-                                    evaluator_cls=GeminiEvaluator))
+if __name__ == '__main__':
+
+    DatasetProcessor.process_file(file_name=os.path.abspath(sys.argv[1]),
+                                  evaluator_cls=GeminiModel)

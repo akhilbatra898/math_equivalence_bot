@@ -1,10 +1,13 @@
 import json
 from typing import List, Dict
-import re
 import time
+import re
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate, HumanMessagePromptTemplate
+from langchain_core.prompts.image import ImagePromptTemplate
+
+from langchain_core.prompts.chat import ChatPromptValue
+from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableLambda
 
@@ -13,16 +16,17 @@ from evaluator import Evaluator
 
 class LangChainEvaluator(Evaluator):
 
-    def __init__(self, model=None, model_name='lang chain model', **kwargs):
+    def __init__(self, model=None,multi_modal_model=None, model_name='lang chain model', **kwargs):
         self.model = model
         self.model_name = model_name
+        self.multi_modal_model = multi_modal_model
         self.params = kwargs
 
     def process(self, conversations: List[Dict]):
         if len(conversations) > 1:
             return self.evaluate_batch(conversations)
         else:
-            return self.evaluate(conversations[0])
+            return self.evaluate__using_chaining(conversations[0])
 
     @staticmethod
     def single_query_template(conversation: Dict) -> str:
@@ -68,20 +72,48 @@ class LangChainEvaluator(Evaluator):
     def get_result_from_resp(resp) -> List[bool]:
         return json.loads(resp)
 
+    def parse_context(self, context):
+        pass
+
+    def handle_context_and_image(self, context):
+        if 'image_url' in str(context):
+            img_url = re.findall(r"https:.*jpg", str(context))[0]
+            try:
+                image_data = self.multi_modal_model.invoke([HumanMessage(
+                    [{"type": "text", "text": "Extract the problem text from the image"},
+                     {"type": "image_url", "image_url": img_url}])])
+            except Exception as _:
+                image_data = ""
+            if image_data != "":
+                return PromptTemplate.from_template("""Provided history of the chat between the user and the bot as Chat 
+                History below, can you check whats the problem that user need to solve and then check if the Answer 
+                provided at the end is right/wrong. Important Note: reply with a one word answer true/false
+        
+                                    Chat History - {context}
+                                    Question - {img_question}
+                                    Answer - {answer}
+                                    """, partial_variables={
+                    'img_question': image_data.content}) | self.model | StrOutputParser()
+
+        return (PromptTemplate.from_template("""Provided history of the chat between the user and the bot as Chat 
+        History below, can you check whats the problem that user need to solve and then check if the Answer 
+        provided at the end is right/wrong. Important Note: reply with a one word answer true/false
+
+                                        Chat History - {context}
+                                        Answer - {answer}
+                                        """) | self.model | StrOutputParser())
+
     def route_logic(self, resp):
-        valid_context_followup_chain = (PromptTemplate.from_template("""If true, user provided the answer - {answer}, Is it the right answer?
-                Note - Respond only 1 word - true/false""") | self.model | StrOutputParser())
-
-        context_inclusion_chain = (PromptTemplate.from_template("""If false, Provided a historical context of the chat between user and zoe, check if use provided the right answer.
-                Note: reply with a one word answer true/false
-
-                Context - {context}
-                Response - {answer}
-                """) | self.model | StrOutputParser())
+        print(resp)
+        valid_context_followup_chain = (PromptTemplate.from_template("""For the given question and answer provided by the user. Validate if the answer provided is right or wrong.
+         Question - {question}
+         Answer - {answer}
+         
+        Note - Respond only 1 word - true/false""") | self.model | StrOutputParser())
         if 'true' in resp['resp'].lower():
             return valid_context_followup_chain
-        else:
-            return context_inclusion_chain
+
+        return self.handle_context_and_image(context=resp['context'])
 
     def evaluate__using_chaining(self, conversation: Dict):
         context_validity_chain = (PromptTemplate.from_template("""Given Question below, is it possible for user to provide an answer?
@@ -95,6 +127,7 @@ class LangChainEvaluator(Evaluator):
         result = full_chain.invoke({"answer": conversation['User Response'],
                                     "question": conversation['Conversation History'][-1],
                                     "context": conversation['Conversation History']})
+        print(result)
         if 'true' in result.lower():
             return "EQUIVALENT"
         else:
